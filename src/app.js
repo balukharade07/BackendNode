@@ -2,6 +2,7 @@ import express from "express";
 import cores from 'cors';
 import cookiesParser from 'cookies-parser'
 
+
 const app = express();
 app.use(cores({
     origin: process.env.CORS_ORIGIN,
@@ -11,6 +12,16 @@ app.use(cores({
 app.use(express.json({limit: '16kb'}));
 app.use(express.urlencoded({extended: true,limit: '16kb'}));
 app.use(express.static("public"))
+
+// Routes
+
+import userRouter from "./routes/user.routes.js";
+
+//routes declerations
+
+app.use('/api/v1/users', userRouter)
+
+userRouter
 
 
 export  { app }
