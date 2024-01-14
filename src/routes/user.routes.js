@@ -21,7 +21,7 @@ router.route("/register").post(
       maxCount: 1,
     },
   ]),
-  registreUser,
+  registreUser
 );
 
 //LoggedInUser
