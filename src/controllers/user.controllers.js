@@ -84,7 +84,7 @@ const loginUser = asyncHandler(async (req, res) => {
   });
 
   if (!user) throw new ApiError(404, "User is not exist.");
-  const isPasswordValid = user?.isPasswordCorrect(password);
+  const isPasswordValid = await user?.isPasswordCorrect(password);
 
   if (!isPasswordValid) throw new ApiError(401, "Password is not correct.");
 
@@ -117,8 +117,8 @@ const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
     {
-      $set: {
-        refreshToken: undefined,
+      $unset: {
+        refreshToken: 1,
       },
     },
     {
@@ -177,6 +177,8 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 
   const user = await User.findById(req.user?._id);
   const isPasswordCurrect = await user.isPasswordCorrect(oldPassword);
+  console.log(isPasswordCurrect);
+
   if (!isPasswordCurrect) throw new ApiError(400, "Invalid old password.");
 
   user.password = newPassword;
@@ -187,6 +189,20 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Password changed successfully!"));
 });
 
+const forgotPassword = asyncHandler( async (req , res) => {
+  const { email, password } = req.body;
+  const user = await User.findById(req.user?._id);
+  if(email !== user?.email) throw new ApiError(400, "Email is not correct.");
+  if(!password) throw new ApiError(400, "password is requierd.");
+
+  user.password = password;
+  await user.save({ validateBeforeSave: false });
+  
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed successfully!"));
+})
+
 const getCurrentUser = asyncHandler((req, res) => {
   return res
     .status(200)
@@ -194,11 +210,11 @@ const getCurrentUser = asyncHandler((req, res) => {
 });
 
 const updatedAccountDetails = asyncHandler(async (req, res) => {
-  const { fullName, email } = req?.body;
+  const { fullName, email } = req.body;
 
   if (!fullName && !email) throw new ApiError(400, "All fields is requierd.");
 
-  const usre = await User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
@@ -217,6 +233,8 @@ const updatedAccountDetails = asyncHandler(async (req, res) => {
 });
 
 const updatedUserAvatar = asyncHandler(async (req, res) => {
+
+  // TODO : - Remove old avatar
   const avatarLocalPath = req?.file.path;
   if (!avatarLocalPath) throw new ApiError(400, "Avatar File is missing");
 
@@ -241,6 +259,7 @@ const updatedUserAvatar = asyncHandler(async (req, res) => {
 });
 
 const updatedUserCoverImage = asyncHandler(async (req, res) => {
+  // TODO : - Reomve old coverImage
   const coverImageLocalPath = req?.file.path;
   if (!coverImageLocalPath)
     throw new ApiError(400, "Cover Image File is missing");
@@ -397,4 +416,5 @@ export {
   updatedUserCoverImage,
   getUserChannelProfile,
   getWatchedHistory,
+  forgotPassword
 };
