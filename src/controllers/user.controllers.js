@@ -5,6 +5,7 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 import { COOKIES_OPTIONS } from "../constants.js";
+import mongoose from "mongoose";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -241,10 +242,12 @@ const updatedUserAvatar = asyncHandler(async (req, res) => {
 
 const updatedUserCoverImage = asyncHandler(async (req, res) => {
   const coverImageLocalPath = req?.file.path;
-  if (!coverImageLocalPath) throw new ApiError(400, "Cover Image File is missing");
+  if (!coverImageLocalPath)
+    throw new ApiError(400, "Cover Image File is missing");
 
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
-  if (!coverImage.url) throw new ApiError(400, "Error while uploding on cover image.");
+  if (!coverImage.url)
+    throw new ApiError(400, "Error while uploding on cover image.");
 
   await User.findByIdAndUpdate(
     req.user?._id,
@@ -263,6 +266,125 @@ const updatedUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Avatar Updated Successfully!"));
 });
 
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+  if (!username?.trim()) throw new ApiError(400, "User name is missing.");
+
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username: username?.toLowerCase(),
+      },
+    },
+    {
+      $lookup: {
+        from: "subsciptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      },
+    },
+    {
+      $lookup: {
+        from: "subsciptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers",
+        },
+        channelSubscribedToCount: {
+          $size: "$subscribedTo",
+        },
+        isSubscribed: {
+          $cond: {
+            if: { $sin: [req?.user?._id, "$subscribers.subscriber"] },
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        fullName: 1,
+        username: 1,
+        subscribersCount: 1,
+        channelSubscribedToCount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverImage: 1,
+        email: 1,
+      },
+    },
+  ]);
+
+  if (!channel?.length) throw new ApiError(404, "Channel does not exists.");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, channel?.at(0), "User Channel fetched succefully.")
+    );
+});
+
+const getWatchedHistory = asyncHandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.usre._id),
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              pipeline: [
+                {
+                  $project: {
+                    fullName: 1,
+                    username: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $addFields : {
+              owner : {
+                $first : "$owner"
+              }
+            }
+          }
+        ],
+      },
+    },
+  ]);
+
+  if (!user?.length) throw new ApiError(404, "Watched history does not exists.");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, user?.at(0)?.watchHistory, "Watched history fetched succefully.")
+    );
+
+});
+
 export {
   registreUser,
   loginUser,
@@ -272,5 +394,7 @@ export {
   getCurrentUser,
   updatedAccountDetails,
   updatedUserAvatar,
-  updatedUserCoverImage
+  updatedUserCoverImage,
+  getUserChannelProfile,
+  getWatchedHistory,
 };
